@@ -1,6 +1,7 @@
 package com.bot4s.telegram.api.declarative
 
 import cats.instances.list._
+import cats.syntax.applicativeError._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.traverse._
@@ -9,6 +10,15 @@ import com.bot4s.telegram.methods.AnswerCallbackQuery
 import com.bot4s.telegram.models.CallbackQuery
 
 import scala.collection.mutable
+import scala.util.Left
+import scala.util.Right
+
+case class CallbackAck(
+  text: Option[String] = None,
+  showAlert: Option[Boolean] = None,
+  url: Option[String] = None,
+  cacheTime: Option[Int] = None
+)
 
 /**
   * Declarative interface for callbacks; allows filtering callback-query events by tag.
@@ -16,6 +26,7 @@ import scala.collection.mutable
 trait Callbacks[F[_]] extends BotBase[F] {
 
   private val callbackActions = mutable.ArrayBuffer[Action[F, CallbackQuery]]()
+  private val safeCallbackActions = mutable.ArrayBuffer[ActionR[F, CallbackQuery, CallbackAck]]()
 
   private def hasTag(tag: String)(cbq: CallbackQuery): Boolean =
     cbq.data.exists(_.startsWith(tag))
@@ -40,9 +51,22 @@ trait Callbacks[F[_]] extends BotBase[F] {
     callbackActions += action
   }
 
+  def onSafeCallbackQuery(action: ActionR[F, CallbackQuery, CallbackAck]): Unit = {
+    safeCallbackActions += action
+  }
+
   override def receiveCallbackQuery(callbackQuery: CallbackQuery): F[Unit] =
     for {
       _ <- callbackActions.toList.traverse(action => action(callbackQuery))
+      _ <-
+        safeCallbackActions.toList.traverse { safeAction =>
+          safeAction(callbackQuery).attempt.flatTap {
+            case Right(ack) =>
+              request(AnswerCallbackQuery(callbackQuery.id, ack.text, ack.showAlert, ack.url, ack.cacheTime))
+            case Left(e) =>
+              request(AnswerCallbackQuery(callbackQuery.id, Some("Internal Error occurred")))
+          }
+        }
       _ <- super.receiveCallbackQuery(callbackQuery)
     } yield ()
 

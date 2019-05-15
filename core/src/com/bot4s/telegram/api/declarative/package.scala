@@ -4,6 +4,7 @@ import cats.Applicative
 
 package object declarative {
   type Action[F[_], T] = T => F[Unit]
+  type ActionR[F[_], T, R] = T => F[R]
   type Filter[T] = T => Boolean
 
   type Args = Seq[String]
