@@ -2,12 +2,14 @@ package com.bot4s.telegram.cats
 
 import cats.MonadError
 import cats.instances.list._
+import cats.syntax.applicativeError._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.traverse._
 import com.bot4s.telegram.api.{Polling => BasePolling}
 import com.bot4s.telegram.methods.{DeleteWebhook, GetMe}
 import com.bot4s.telegram.models.User
+import scala.util.control.NonFatal
 import slogging.StrictLogging
 
 case class PollingState(botUser: User, offset: Option[Long])
@@ -18,10 +20,14 @@ trait Polling[F[_]] extends BasePolling[F] with StrictLogging {
 
   private def poll(state: PollingState): F[Unit] =
     for {
-      updates <- pollingGetUpdates(state.offset.map(_ + 1))
+      updates <- pollingGetUpdates(state.offset.map(_ + 1)).handleErrorWith {
+        case NonFatal(e) =>
+          logger.error("Polling error", e)
+          monad.pure(Seq.empty)
+      }
       _ <- updates.toList.traverse { update =>
         monad.handleErrorWith(receiveUpdate(update, Some(state.botUser))) { e =>
-          logger.warn(s"Can not process updates $update", e)
+          logger.error(s"Can not process updates $update", e)
           unit
         }
       }
