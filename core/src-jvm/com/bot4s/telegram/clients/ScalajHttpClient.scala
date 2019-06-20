@@ -105,7 +105,10 @@ class ScalajHttpClient(token: String, proxy: Proxy = Proxy.NO_PROXY, telegramHos
           marshalling.fromJson[Response[R]](x.body)
         else
           throw new RuntimeException(s"Error ${x.code} on request")
-    } map (processApiResponse[R])
+    } map (processApiResponse[R]) map {
+      case Right(resp) => resp
+      case Left(excp) => throw excp
+    }
   }
 
 }

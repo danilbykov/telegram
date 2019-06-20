@@ -1,6 +1,8 @@
 package com.bot4s.telegram.clients
 
 import cats.MonadError
+import cats.syntax.applicativeError._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import com.bot4s.telegram.api.RequestHandler
 import com.bot4s.telegram.marshalling.CaseConversions
@@ -10,7 +12,7 @@ import com.bot4s.telegram.marshalling
 import com.bot4s.telegram.methods._
 import com.bot4s.telegram.models.InputFile
 import io.circe.parser.parse
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, Json}
 import slogging.StrictLogging
 
 import scala.concurrent.duration._
@@ -70,13 +72,24 @@ class SttpClient[F[_]](token: String, telegramHost: String = "api.telegram.org")
 
     import com.bot4s.telegram.marshalling.responseDecoder
 
-    val response = sttpRequest
+    sttpRequest
       .readTimeout(readTimeout)
       .response(asJson[Response[R]])
       .send[F]()
-
-    response
-      .map(_.unsafeBody)
-      .map(processApiResponse[R])
+      .attempt
+      .map(_.map(_.body))
+      .flatMap[R] {
+        case Right(Right(resp)) =>
+          monadError.fromEither(processApiResponse(resp))
+        case Right(Left(message)) =>
+          parse(message).getOrElse(Json.Null).as[Response[R]] match {
+            case Right(resp) =>
+              monadError.fromEither(processApiResponse(resp))
+            case Left(excp) =>
+              monadError.raiseError(excp)
+          }
+        case Left(excp) =>
+          monadError.raiseError(excp)
+      }
   }
 }

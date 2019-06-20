@@ -1,8 +1,13 @@
 import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.IOApp
+import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory}
 
 object Launcher extends IOApp {
+
+  LoggerConfig.factory = PrintLoggerFactory()
+  // set log level, e.g. to TRACE
+  LoggerConfig.level = LogLevel.TRACE
 
   def run(args: List[String]): IO[ExitCode] =
     args match {

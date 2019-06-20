@@ -105,12 +105,13 @@ abstract class RequestHandler[F[_]](implicit monadError: MonadError[F, Throwable
       case s: UploadStickerFile => sendRequest[R, UploadStickerFile](s)
     }
 
-  protected def processApiResponse[R](response: Response[R]): R = response match {
-    case Response(true, Some(result), _, _, _) => result
-    case Response(false, _, description, Some(errorCode), parameters) =>
-      throw TelegramApiException(description.getOrElse("Unexpected/invalid/empty response"), errorCode, None, parameters)
-
+  protected def processApiResponse[R](response: Response[R]): Either[Exception, R] = response match {
+    case Response(true, Some(result), _, _, _) =>
+      Right(result)
+    case Response(false, _, description, errorCode, parameters) =>
+      val message = description.getOrElse("Unexpected/invalid/empty response")
+      Left(TelegramApiException(message, errorCode, None, parameters))
     case other =>
-      throw new RuntimeException(s"Unexpected API response: $other")
+      Left(new RuntimeException(s"Unexpected API response: $other"))
   }
 }
