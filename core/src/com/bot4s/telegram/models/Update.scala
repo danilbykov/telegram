@@ -30,6 +30,7 @@ case class Update(
                    preCheckoutQuery   : Option[PreCheckoutQuery] = None
                  ) {
 
+  /*
   require(
     Seq[Option[_]](
       message,
@@ -44,4 +45,5 @@ case class Update(
     ).count(_.isDefined) == 1,
     "Exactly one of the optional fields should be used"
   )
+  */
 }
